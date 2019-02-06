@@ -37,18 +37,5 @@ The Kubernetes command-line tool, kubectl, can be used to deploy and manage appl
 
 1. Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/#install-kubectl)
 
-### Install knctl CLI
-The Knative command-line tool, knctl provides a set of commands to interact with a Knative installation. Let's install knctl as well.
-
-1. Install knctl using one of the prebuilt binaries from their [release page](https://github.com/cppforlife/knctl/releases), and run the following commands:
-
-    ```
-    shasum -a 265 ~/Downloads/knctl-*
-    # Compare checksum output to what's included in the release notes
-
-    mv ~/Downloads/knctl-* /usr/local/bin/knctl
-
-    chmod +x /usr/local/bin/knctl
-    ```
 
 Continue on to [exercise 1](../exercise-1/README.md).
