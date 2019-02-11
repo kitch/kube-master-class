@@ -1,58 +1,31 @@
-## Update domain configuration for Knative
-When a Knative application is deployed, Knative will define a URL for your application. By default, Knative Serving routes use `example.com` as the default domain. The fully qualified domain name for a route by default is `{route}.{namespace}.{default-domain}`, where `{route}` is the name of the application to deploy.
+# Scheduling and Autoscaling
 
-Because we want our application to be accessible at a URL we own, we need to configure Knative to assign new applications to our own domain.
+## LimitRange
+Before we can test auto scaling we'll implement a LimitRange so that all pods created will have default resource requests and limits.
 
-### Get the Ingress Subdomain for your IBM Kubernetes Cluster
-What hostname should we use? Luckily for us, IBM Kubernetes Service gave us an external domain when we created our cluster. We'll first get that URL, tell Knative to assign new applications to that URL, and then forward requests to our Ingress Subdomain to the Knative Istio Gateway.
-
-1. First, let's get the ingress subdomain for our cluster.
-
-	```
-	ibmcloud ks cluster-get <my-cluster-name>
-	```
-
-	Example Output:
-	```
-	Ingress Subdomain:      bmv-knative.us-east.containers.appdomain.cloud   
-	```
-	Ingress is a Kubernetes service that balances network traffic workloads in your cluster by forwarding public or private requests to your apps. This Ingress Subdomain is an externally available and public URL providing access to your cluster. Take note of this Ingress Subdomain.
-
-2. Next, update the default URL for new Knative apps by editing the configuration:
-
-	```
-	kubectl edit cm config-domain --namespace knative-serving
-	```
-
-3. Change all instances of `example.com` to your ingress subdomain, which should look something like: `bmv-knative.us-east.containers.appdomain.cloud`. There should be two instances of `example.com`, one under `data` and one under `annotations`. New Knative applications will now be assigned a route with this host, rather than `example.com`.
-
-### Forward specific requests coming into IKS ingress to the Knative Ingress Gateway
-
-1. When requests come in to our fibonacci application through the ingress subdomain, we want them to be forwarded to the Knative ingress gateway. Update the `forward-ingress.yaml` file with your own ingress subdomain, prepended with `fib-knative.default`. Remember that the fully qualified domain name for a route has the following form: `{route}.{namespace}.{domain}`.
-
-The file should look something like:
-
-```yaml
-  apiVersion: extensions/v1beta1
-  kind: Ingress
-  metadata:
-    name: iks-knative-ingress
-    namespace: istio-system
-    spec:
-      rules:
-        - host: fib-knative.default.<ingress_subdomain>
-          http:
-            paths:
-              - path: /
-                backend:
-                  serviceName: knative-ingressgateway
-                  servicePort: 80
 ```
-
-2. Apply the ingress rule.
-
-	```
-	kubectl apply --filename forward-ingress.yaml
-	```
-
-Continue on to [exercise 6](../exercise-6/README.md).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mem-limit-range
+spec:
+  limits:
+  - default:
+      memory: 512Mi
+    defaultRequest:
+      memory: 256Mi
+    type: Container
+```
+```
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-limit-range
+spec:
+  limits:
+  - default:
+      cpu: 20m
+    defaultRequest:
+      cpu: 10m
+    type: Container
+```

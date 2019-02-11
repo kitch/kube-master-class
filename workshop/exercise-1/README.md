@@ -4,12 +4,12 @@ If you have already created a cluster on IBM Cloud, and have set the context for
 ### Create a standard cluster
 This lab requires a standard (paid) cluster. Create a new standard cluster from the [IBM Cloud UI](https://cloud.ibm.com/containers-kubernetes/catalog/cluster/create).
 
-1. To ensure the cluster is large enough to host all the Knative and Istio
+1. To ensure the cluster is large enough to host Istio
 components, the recommended configuration for a cluster is:
-  - Kubernetes version 1.11 or later
-  - 4 vCPU nodes with 16GB memory (`b2c.4x16`)
+  - Kubernetes version 1.10 or later
+  - Two nodes: 2 vCPU nodes with 4GB memory (`u2c.2x4`)
 
-2. It is required to select the worker zone, as well as to create a unique cluster name for your cluster. Ensure you've selected Kubernetes version 1.11.x, which may not be the default.
+2. It is required to select the worker zone, as well as to create a unique cluster name for your cluster. Ensure you've selected Kubernetes version 1.10.x, which may not be the default.
 
 3. Click `Create Cluster`.
 
