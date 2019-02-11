@@ -7,35 +7,57 @@ Before we get started we'll need a copy of the istio source code. Much of this e
 Some of the sample apps are located in the istio git repo. You will need to clone this repo locally:
 ```
 cd ~/kops101/workshop/exercise-istio
-git clone https://github.com/istio/istio.git ~/kops101/workshop/
+git clone https://github.com/istio/istio.git ~/kops101/workshop/exercise-istio/istio
 ```
 
-#!/bin/bash
+Now that we have all the source and samples we'll need, let's get to work.
 
+## Install Istio
 
-ibmcloud ks region-set us-east
-ibmcloud login -a https://api.ng.bluemix.net -u jakek@us.ibm.com -c 33c5711b8afbf7fd809a4529de613a08
-kubectl label ns default istio-injection=enabled
+Thanks to the magic of IBM Cloud Kubernetes Service you can now simply install a managed Istio deployment by simply running
+```
+ibmcloud ks clusters
+ibmcloud ks cluster-addon-enable istio --cluster <yourcluster>
+```
 
+Enable your kubernetes context to point to your cluster
+```
+ibmcloud ks clusters
+$(ibmcloud ks cluster-config --export --cluster <yourcluster>
+```
 
+After a few minutes the deployment of Istio will be complete. You can verify this by ensuing that all pods are in running state in
+```
+kubectl -n istio-system get pods -o wide -w
+```
+Once all pods reach running state you are ready to go.
 
-# FooBar setup
+## Globally Enable mTLS
+
+This section is largely based upon the documentation and samples found in the official [istio documentation](https://istio.io/docs/tasks/security/authn-policy/#globally-enabling-istio-mutual-tls).
+
+Set up our sample applications
+```
 kubectl create ns foo
-kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n foo
-kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n foo
+kubectl label ns foo istio-injection=enabled
+kubectl apply -f istio/samples/httpbin/httpbin.yaml -n foo
+kubectl apply -f istio/samples/sleep/sleep.yaml -n foo
 kubectl create ns bar
-kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n bar
-kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n bar
+kubectl label ns bar istio-injection=enabled
+kubectl apply -f istio/samples/httpbin/httpbin.yaml -n bar
+kubectl apply -f istio/samples/sleep/sleep.yaml -n bar
 kubectl create ns legacy
-kubectl apply -f samples/httpbin/httpbin.yaml -n legacy
-kubectl apply -f samples/sleep/sleep.yaml -n legacy
-
-# Verify
-kubectl exec $(kubectl get pod -l app=sleep -n bar -o jsonpath='{.items..metadata.name}') -c sleep -n bar -- curl http://httpbin.foo:8000/ip -s -o /dev/null -w "%{http_code}\n"
-
+kubectl apply -f istio/samples/httpbin/httpbin.yaml -n legacy
+kubectl apply -f istio/samples/sleep/sleep.yaml -n legacy
+```
+Once we have deployed all of our sample applications we can do a simple verification. This command should return `200` for all checks.
+```
 for from in "foo" "bar" "legacy"; do for to in "foo" "bar" "legacy"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath='{.items..metadata.name}') -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
 
-# Globaly Enable mTLS
+### Enable mTLS
+Let's now enable global mTLS. This will enable TLS enforcement for the receiving side for all services enabled with Istio sidecars (Envoy).
+```
 cat <<EOF | kubectl apply -f -
 apiVersion: "authentication.istio.io/v1alpha1"
 kind: "MeshPolicy"
@@ -45,11 +67,15 @@ spec:
   peers:
   - mtls: {}
 EOF
+```
 
-# Verify 503
+It may take a few moments for the Istio control plane to roll out all the changes. We will repeat our connection test from earlier. However, this time all the connections will fail with a 503 due to the fact that we have not yet enabled the requesting clients to use TLS.
+```
 for from in "foo" "bar"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath='{.items..metadata.name}') -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
 
-# Setup Destination Rule
+We will now set up an Istio DestinationRule which will enable all Istio enabled pods making requests to Istio services will use TLS for connections.
+```
 cat <<EOF | kubectl apply -f -
 apiVersion: "networking.istio.io/v1alpha3"
 kind: "DestinationRule"
@@ -62,13 +88,23 @@ spec:
     tls:
       mode: ISTIO_MUTUAL
 EOF
+```
 
-# Verify 200
+It may take a few moments for the Istio control plane to roll out all the changes. We will repeat our connection test from earlier. One last time we'll verify our connections. This time we will see all 200s as our DestinationRule and MeshPolicy combined ensure mTLS on both ends of our connection.
+```
 for from in "foo" "bar"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath='{.items..metadata.name}') -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
 
-# non-Istio to Istio
+### Test Legacy services to Istio services
+Last test. Now we will attempt to connect to services that are in the mesh (foo/bar namespaces) from our legacy namespace which is not in the mesh (legacy namespace). Here connections will fail as expected.
+```
 for from in "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath='{.items..metadata.name}') -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
 
+### Enable Istio services to connect to the kube-apiserver
+
+It's important to set up a DestiationRule to allow Istio services to connect to the kube-apiserver. This will disable tls for connections to the `kubernetes` service. In IKS (and most Kube clusters) standard TLS authentication is used with the kube-apiserver so we disable the Istio mTLS.
+```
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
@@ -80,10 +116,13 @@ spec:
    tls:
      mode: DISABLE
 EOF
+```
 
-# Istio to kube-apiserver
+Let's verify that we are able to connect to the kube-apiserver. We should receive a `200` response code.
+```
 TOKEN=$(kubectl describe secret $(kubectl get secrets | grep default | cut -f1 -d ' ') | grep -E '^token' | cut -f2 -d':' | tr -d '\t')
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath='{.items..metadata.name}') -c sleep -n foo --  curl https://kubernetes.default/api --header "Authorization: Bearer $TOKEN" --insecure -s -o /dev/null -w "%{http_code}\n"
+```
 
 # Cleanup
 kubectl delete meshpolicy default
