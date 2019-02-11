@@ -405,7 +405,9 @@ kubectl exec -it $SOURCE_POD -c sleep -- curl -sL -o /dev/null -D - https://edit
 
 Now let's see if our request was routed through the egress gateway pod in the istio-system namespace. We should see a request count for our service.
 ```
-kubectl exec -it $(kubectl get pod -l istio=egressgateway -n istio-system -o jsonpath='{.items[0].metadata.name}') -n istio-system -- curl -s localhost:15000/stats | grep edition.cnn.com.upstream_cx_total
+kubectl exec -it $(kubectl get pod -l istio=egressgateway -n istio-system \
+-o jsonpath='{.items[0].metadata.name}') -n istio-system -- curl \
+-s localhost:15000/stats | grep edition.cnn.com.upstream_cx_total
 ```
 
 ### Cleanup (optional)
