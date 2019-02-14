@@ -1,37 +1,94 @@
 
+# RBAC Exercise
+
+In this part of our lab we'll be learning a little bit about how RBAC works. To accomplish this we'll practice creating a few RBAC policies and reviewing what the imapact is of the policies we create.  IKS also makes available very powerful IBM Cloud IAM integration with RBAC, but here we'll get our hands dirty by implementing it manually.
 
 ```
-$ kubectl create ns team-a
-namespace “team-a” created
-```
-
-```
+kubectl create ns team-a
 kubectl -n team-a create serviceaccount travis
-serviceaccount "travis" created
-```
-
-```
-$ kubectl create ns team-b
-namespace “team-b” created
-```
-
-```
+kubectl create ns team-b
 kubectl -n team-b create serviceaccount jenkins
-serviceaccount "jenkins" created
 ```
 
 ```
-jakekit at kitchbook in ~
-$ JENKINS_KUBE_TOKEN=`kubectl -n team-a get secret $(kubectl -n serviceids get secret | grep jenkins | awk '{print $1}') -o json | jq -r '.data.token'  | base64 -D`
+TRAVIS_KUBE_TOKEN=`kubectl -n team-a get secret $(kubectl -n team-a get secret | grep travis | awk '{print $1}') -o json | jq -r '.data.token'  | base64 -D`
+```
 
-jakekit at kitchbook in ~
-$ TRAVIS_KUBE_TOKEN=`kubectl -n team-b get secret $(kubectl -n serviceids get secret | grep travis | awk '{print $1}') -o json | jq -r '.data.token'  | base64 -D`
+```
+JENKINS_KUBE_TOKEN=`kubectl -n team-b get secret $(kubectl -n team-b get secret | grep jenkins | awk '{print $1}') -o json | jq -r '.data.token'  | base64 -D`
+```
 
-jakekit at kitchbook in ~
-$ kubectl --server=https://169.61.83.62:31151 --token=$TRAVIS_KUBE_TOKEN get deployments -n squad-a-apps
-Error from server (Forbidden): deployments.extensions is forbidden: User "system:serviceaccount:serviceids:travis" cannot list deployments.extensions in the namespace "squad-a-apps"
-jakekit at kitchbook in ~
+```
+kubectl --token=$TRAVIS_KUBE_TOKEN get deployments -n team-a
+kubectl --token=$JENKINS_KUBE_TOKEN get deployments -n team-b
+```
 
-$ kubectl --server=https://169.61.83.62:31151 --token=$JENKINS_KUBE_TOKEN get deployments -n squad-b-apps
-Error from server (Forbidden): deployments.extensions is forbidden: User "system:serviceaccount:serviceids:jenkins" cannot list deployments.extensions in the namespace "squad-b-apps"
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: cicd-apps
+rules:
+- apiGroups:
+  - apps
+  - extensions
+  resources:
+  - deployments
+  - replicasets
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+EOF
+```
+
+
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: travis-apps
+  namespace: team-a
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cicd-apps
+subjects:
+- kind: ServiceAccount
+  name: travis
+  namespace: team-a
+EOF
+```
+
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-apps
+  namespace: team-b
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cicd-apps
+subjects:
+- kind: ServiceAccount
+  name: jenkins
+  namespace: team-b
+EOF
+```
+
+
+
+## Cleanup
+```
+kubectl delete ns team-a team-b
+kubectl delete clusterrole cicd-apps
 ```
