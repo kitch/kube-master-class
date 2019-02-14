@@ -52,8 +52,11 @@ Now let's see what our new pods look like
 kubectl -n hello get pod -l run=hello-app -o yaml
 ```
 
-You'll notice that these pods have had requests and limits applied to them for us by the limit range, even though the deployment does not have any defined.
+You'll notice that these pods have had requests applied to them for us by the limit range, even though the deployment does not have any defined.
 
+```
+kubectl -n hello get pods -o yaml | grep -A 1 -B 3 cpu:
+```
 Next lets expose our new deployment as a service.
 ```
 kubectl -n hello expose deploy hello-app --name hello-svc --port=80 --target-port=8080
@@ -72,11 +75,6 @@ This will enable autoscaling for our hello-app deployment.
 ```
 kubectl -n hello get hpa
 ```
-```
-$ kubectl -n hello get hpa
-NAME        REFERENCE              TARGETS         MINPODS   MAXPODS   REPLICAS   AGE
-hello-app   Deployment/hello-app   <unknown>/80%   1         10        0          13s
-```
 
 Initially the HPA may not have any data for the current CPU usage, in a few minutes we should see data start to roll in. You can also check via `kubectl top pods`. Once we have some metrics data for our HPA let's move on to the next step.
 
@@ -93,12 +91,17 @@ Once we start up our load generator we can use a watch to _watch_ what is happen
 kubectl get hpa -w
 ```
 
+In a few minutes we'll see CPU start to spike and the HPA will scale up our application to meet demand based on our scaling policy. Once the app has scale up successfully we can delete our load generator and watch it scale back down.
+
+```
+kubectl -n hello delete deploy hello-load
+kubectl get hpa -w
+```
+
+
 
 ## Cleanup
 
 ```
-kubectl delete limitrange --all
-kubectl delete deploy hello-app
-kubectl delete svc hello-svc
-kubectl delete deploy hello-load
+kubectl delete ns hello
 ```
