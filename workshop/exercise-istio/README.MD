@@ -6,6 +6,7 @@ Before we get started we'll need a copy of the istio source code. Much of this e
 
 Some of the sample apps are located in the istio git repo. You will need to clone this repo locally:
 ```
+mkdir -p ~/kops101/workshop/exercise-istio
 cd ~/kops101/workshop/exercise-istio
 git clone https://github.com/istio/istio.git ~/kops101/workshop/exercise-istio/istio
 ```
