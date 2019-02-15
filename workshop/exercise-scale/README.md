@@ -88,7 +88,7 @@ kubectl -n hello run hello-load --image=alpine --command -- sh -c 'apk update &&
 Once we start up our load generator we can use a watch to _watch_ what is happening with our autoscaler
 
 ```
-kubectl get hpa -w
+kubectl -n hello get hpa -w
 ```
 
 In a few minutes we'll see CPU start to spike and the HPA will scale up our application to meet demand based on our scaling policy. Once the app has scale up successfully we can delete our load generator and watch it scale back down.
